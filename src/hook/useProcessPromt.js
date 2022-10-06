@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { IMAGE_REGEX } from './const';
+import { IMAGE_REGEX } from '../const';
 
 export const useProcessPromt = ({ config }) => {
     const [taskQueue, setTaskQueue] = useState([]);
