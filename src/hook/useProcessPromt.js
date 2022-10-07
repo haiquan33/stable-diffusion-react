@@ -56,7 +56,7 @@ export const useProcessPromt = ({ config }) => {
 
     useEffect(() => {
         async function checkTasks() {
-            const newTaskQueu = [...taskQueue]
+            const newTaskQueu = [...taskQueue];
             if (newTaskQueu.length === 0) {
                 setStatus('request', 'done', 'success');
                 return;
@@ -71,8 +71,6 @@ export const useProcessPromt = ({ config }) => {
             let successCount = 0;
 
             currentTask.current.isProcessing = true;
-
-
 
             for (let i = 0; i < currentTask.current.batchCount; i++) {
                 currentTask.current.reqBody['seed'] = currentTask.current.seed + i * currentTask.current.reqBody['num_outputs'];
@@ -89,12 +87,10 @@ export const useProcessPromt = ({ config }) => {
                 }
             }
 
-
-
             time = new Date().getTime() - time;
             time /= 1000;
             setIsProcessing(false);
-            setTaskQueue(newTaskQueu)
+            setTaskQueue(newTaskQueu);
         }
         checkTasks();
     }, [taskQueue]);
@@ -157,7 +153,6 @@ export const useProcessPromt = ({ config }) => {
                             stepsRemaining = stepsRemaining < 0 ? 0 : stepsRemaining;
                             timeRemaining = timeTaken === -1 ? 0 : stepsRemaining * timeTaken; // ms
                             setProcessPercent(percent);
-
                         }
                     } catch (e) {
                         finalJSON += jsonStr;
@@ -225,10 +220,10 @@ export const useProcessPromt = ({ config }) => {
             handleMsg(
                 'error',
                 'Stable Diffusion had an error. Please check the logs in the command-line window. <br/><br/>' +
-                e +
-                '<br/><pre>' +
-                e.stack +
-                '</pre>'
+                    e +
+                    '<br/><pre>' +
+                    e.stack +
+                    '</pre>'
             );
             handleStatus('request', 'error', 'error');
             setIsProcessing(false);
@@ -253,8 +248,7 @@ export const useProcessPromt = ({ config }) => {
                 continue;
             }
 
-
-            setResult({ src: imgBody })
+            setResult({ src: imgBody });
         }
 
         return true;
@@ -332,7 +326,6 @@ export const useProcessPromt = ({ config }) => {
 
         let taskEntry = document.createElement('div');
 
-
         task['numOutputsTotal'] = numOutputsTotal;
 
         newTaskQueue.unshift(task);
@@ -352,16 +345,16 @@ export const useProcessPromt = ({ config }) => {
                 console.log(e);
             }
         } else {
-            let newTaskQueue = [...taskQueue]
+            let newTaskQueue = [...taskQueue];
             let idx = newTaskQueue.indexOf(current);
             if (idx >= 0) {
                 newTaskQueue.splice(idx, 1);
             }
 
             newTaskQueue.remove();
-            setTaskQueue(newTaskQueue)
+            setTaskQueue(newTaskQueue);
         }
-    }
+    };
 
-    return { makeImage, result }
+    return { makeImage, result, processPercent };
 };
