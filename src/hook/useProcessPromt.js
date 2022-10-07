@@ -1,30 +1,34 @@
-import { useEffect, useState } from 'react';
-import { IMAGE_REGEX } from '../const';
+import { useEffect, useRef, useState } from 'react';
+import { API_PATH, IMAGE_REGEX, MAX_INIT_IMAGE_DIMENSION } from '../const';
 
 export const useProcessPromt = ({ config }) => {
     const [taskQueue, setTaskQueue] = useState([]);
+
     const [status, setStatus] = useState();
     const [isProcessing, setIsProcessing] = useState(false);
     const [processPercent, setProcessPercent] = useState(0);
     const [msg, setMsg] = useState({ status: '', msg: '' });
+    const [result, setResult] = useState({});
     const [serverStatus, setServerStatus] = useState('online');
+    const currentTask = useRef(null);
+
     const {
-        randomSeed,
-        seedField,
-        numOutputsTotalField,
-        numOutputsParallelField,
+        randomSeed = true,
+        seedField = 1,
+        numOutputsTotalField = 1,
+        numOutputsParallelField = 1,
         streamImageProgressField,
         promptField,
         negativePromptField = '',
-        guidanceScaleField = 75,
+        guidanceScaleField = 7.5,
         numInferenceStepsField = 50,
-        widthField,
-        heightField,
+        widthField = 512,
+        heightField = 512,
         turboField = true,
         useCPUField = false,
-        useFullPrecisionField = true,
+        useFullPrecisionField = false,
         showOnlyFilteredImageField,
-        initImagePreview,
+        initImagePreview = '',
         promptStrengthField = 80,
         samplerField = 'plms',
         saveToDisk = false,
@@ -52,49 +56,31 @@ export const useProcessPromt = ({ config }) => {
 
     useEffect(() => {
         async function checkTasks() {
-            if (taskQueue.length === 0) {
+            const newTaskQueu = [...taskQueue]
+            if (newTaskQueu.length === 0) {
                 setStatus('request', 'done', 'success');
-                setTimeout(checkTasks, 500);
-                stopImageBtn.style.display = 'none';
-                makeImageBtn.innerHTML = 'Make Image';
-
-                currentTask = null;
-
-                if (bellPending) {
-                    if (isSoundEnabled()) {
-                        playSound();
-                    }
-                    bellPending = false;
-                }
-
                 return;
             }
 
             handleStatus('request', 'fetching..');
             setIsProcessing(true);
 
-            previewTools.style.display = 'block';
-
-            let task = taskQueue.pop();
-            currentTask = task;
-
+            currentTask.current = newTaskQueu.pop();
             let time = new Date().getTime();
 
             let successCount = 0;
 
-            task.isProcessing = true;
-            task['stopTask'].innerHTML = '<i class="fa-solid fa-circle-stop"></i> Stop';
-            task['taskStatusLabel'].innerText = 'Processing';
-            task['taskStatusLabel'].className += ' activeTaskLabel';
-            console.log(task['taskStatusLabel'].className);
+            currentTask.current.isProcessing = true;
 
-            for (let i = 0; i < task.batchCount; i++) {
-                task.reqBody['seed'] = task.seed + i * task.reqBody['num_outputs'];
 
-                let success = await doMakeImage(task);
-                task.batchesDone++;
 
-                if (!task.isProcessing) {
+            for (let i = 0; i < currentTask.current.batchCount; i++) {
+                currentTask.current.reqBody['seed'] = currentTask.current.seed + i * currentTask.current.reqBody['num_outputs'];
+
+                let success = await doMakeImage(currentTask.current);
+                currentTask.current.batchesDone++;
+
+                if (!currentTask.current?.isProcessing) {
                     break;
                 }
 
@@ -103,28 +89,12 @@ export const useProcessPromt = ({ config }) => {
                 }
             }
 
-            task.isProcessing = false;
-            task['stopTask'].innerHTML = '<i class="fa-solid fa-trash-can"></i> Remove';
-            task['taskStatusLabel'].style.display = 'none';
+
 
             time = new Date().getTime() - time;
             time /= 1000;
-
-            if (successCount === task.batchCount) {
-                task.outputMsg.innerText = 'Processed ' + task.numOutputsTotal + ' images in ' + time + ' seconds';
-
-                // setStatus('request', 'done', 'success')
-            } else {
-                if (task.outputMsg.innerText.toLowerCase().indexOf('error') === -1) {
-                    task.outputMsg.innerText = 'Task ended after ' + time + ' seconds';
-                }
-            }
-
-            if (randomSeedField.checked) {
-                seedField.value = task.seed;
-            }
-
-            currentTask = null;
+            setIsProcessing(false);
+            setTaskQueue(newTaskQueu)
         }
         checkTasks();
     }, [taskQueue]);
@@ -136,11 +106,6 @@ export const useProcessPromt = ({ config }) => {
 
         const reqBody = task.reqBody;
         const batchCount = task.batchCount;
-        const outputContainer = task.outputContainer;
-
-        const previewPrompt = task['previewPrompt'];
-        const progressBar = task['progressBar'];
-
         let res = '';
         let seed = reqBody['seed'];
         let numOutputs = parseInt(reqBody['num_outputs']);
@@ -148,7 +113,7 @@ export const useProcessPromt = ({ config }) => {
         let images = [];
 
         try {
-            res = await fetch('/image', {
+            res = await fetch(`${API_PATH}/image`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -191,23 +156,8 @@ export const useProcessPromt = ({ config }) => {
                             stepsRemaining = totalSteps - overallStepCount;
                             stepsRemaining = stepsRemaining < 0 ? 0 : stepsRemaining;
                             timeRemaining = timeTaken === -1 ? 0 : stepsRemaining * timeTaken; // ms
+                            setProcessPercent(percent);
 
-                            // outputMsg.innerHTML = `Batch ${task.batchesDone + 1} of ${batchCount}`;
-                            // outputMsg.innerHTML += `. Generating image(s): ${percent}%`;
-
-                            // outputMsg.innerHTML += `. Time remaining (approx): ${timeRemaining}`;
-                            // outputMsg.style.display = 'block';
-
-                            if (stepUpdate.output !== undefined) {
-                                makeImageContainers(numOutputs);
-
-                                for (idx in stepUpdate.output) {
-                                    let imgItem = images[idx];
-                                    let img = imgItem.firstChild;
-                                    let tmpImageData = stepUpdate.output[idx];
-                                    img.src = tmpImageData['path'] + '?t=' + new Date().getTime();
-                                }
-                            }
                         }
                     } catch (e) {
                         finalJSON += jsonStr;
@@ -231,7 +181,8 @@ export const useProcessPromt = ({ config }) => {
                     );
                 }
                 res = undefined;
-                progressBar.style.display = 'none';
+                setIsProcessing(false);
+                setProcessPercent(0);
             } else {
                 if (finalJSON !== undefined && finalJSON.indexOf('}{') !== -1) {
                     // hack for a middleman buffering all the streaming updates, and unleashing them
@@ -274,10 +225,10 @@ export const useProcessPromt = ({ config }) => {
             handleMsg(
                 'error',
                 'Stable Diffusion had an error. Please check the logs in the command-line window. <br/><br/>' +
-                    e +
-                    '<br/><pre>' +
-                    e.stack +
-                    '</pre>'
+                e +
+                '<br/><pre>' +
+                e.stack +
+                '</pre>'
             );
             handleStatus('request', 'error', 'error');
             setIsProcessing(false);
@@ -287,10 +238,6 @@ export const useProcessPromt = ({ config }) => {
         if (!res) {
             return false;
         }
-
-        lastPromptUsed = reqBody['prompt'];
-
-        makeImageContainers(res.output.length);
 
         for (let idx in res.output) {
             let imgBody = '';
@@ -306,62 +253,8 @@ export const useProcessPromt = ({ config }) => {
                 continue;
             }
 
-            let imgItem = images[idx];
-            let img = imgItem.firstChild;
 
-            img.src = imgBody;
-
-            let imgItemInfo = document.createElement('span');
-            imgItemInfo.className = 'imgItemInfo';
-            imgItemInfo.style.opacity = 0;
-
-            let imgSeedLabel = document.createElement('span');
-            imgSeedLabel.className = 'imgSeedLabel';
-            imgSeedLabel.innerText = 'Seed: ' + seed;
-
-            let imgUseBtn = document.createElement('button');
-            imgUseBtn.className = 'imgUseBtn';
-            imgUseBtn.innerText = 'Use as Input';
-
-            let imgSaveBtn = document.createElement('button');
-            imgSaveBtn.className = 'imgSaveBtn';
-            imgSaveBtn.innerText = 'Download';
-
-            imgItem.appendChild(imgItemInfo);
-            imgItemInfo.appendChild(imgSeedLabel);
-            imgItemInfo.appendChild(imgUseBtn);
-            imgItemInfo.appendChild(imgSaveBtn);
-
-            imgUseBtn.addEventListener('click', function () {
-                initImageSelector.value = null;
-                initImagePreview.src = imgBody;
-
-                initImagePreviewContainer.style.display = 'block';
-                inpaintingEditorContainer.style.display = 'none';
-                promptStrengthContainer.style.display = 'block';
-                maskSetting.checked = false;
-
-                // maskSetting.style.display = 'block'
-
-                randomSeedField.checked = false;
-                seedField.value = seed;
-                seedField.disabled = false;
-            });
-
-            imgSaveBtn.addEventListener('click', function () {
-                let imgDownload = document.createElement('a');
-                imgDownload.download = createFileName();
-                imgDownload.href = imgBody;
-                imgDownload.click();
-            });
-
-            imgItem.addEventListener('mouseenter', function () {
-                imgItemInfo.style.opacity = 1;
-            });
-
-            imgItem.addEventListener('mouseleave', function () {
-                imgItemInfo.style.opacity = 0;
-            });
+            setResult({ src: imgBody })
         }
 
         return true;
@@ -404,8 +297,8 @@ export const useProcessPromt = ({ config }) => {
             promptStrengthField,
         };
 
-        if (IMAGE_REGEX.test(initImagePreview.src)) {
-            reqBody['init_image'] = initImagePreview.src;
+        if (IMAGE_REGEX.test(initImagePreview)) {
+            reqBody['init_image'] = initImagePreview;
             reqBody['prompt_strength'] = promptStrengthField;
 
             // if (IMAGE_REGEX.test(maskImagePreview.src)) {
@@ -432,76 +325,43 @@ export const useProcessPromt = ({ config }) => {
             reqBody['use_upscale'] = upscaleModelField;
         }
 
-        let taskConfig = `Seed: ${seed}, Sampler: ${reqBody['sampler']}, Inference Steps: ${numInferenceStepsField}, Guidance Scale: ${guidanceScaleField}`;
-
-        if (negativePromptField.trim() !== '') {
-            taskConfig += `, Negative Prompt: ${negativePromptField.trim()}`;
-        }
-
-        if (reqBody['init_image'] !== undefined) {
-            taskConfig += `, Prompt Strength: ${promptStrengthField}`;
-        }
-
-        if (useFaceCorrectionField.checked) {
-            taskConfig += `, Fix Faces: ${reqBody['use_face_correction']}`;
-        }
-
-        if (useUpscalingField.checked) {
-            taskConfig += `, Upscale: ${reqBody['use_upscale']}`;
-        }
-
         task['reqBody'] = reqBody;
         task['seed'] = seed;
         task['batchCount'] = batchCount;
         task['isProcessing'] = false;
 
         let taskEntry = document.createElement('div');
-        taskEntry.className = 'imageTaskContainer';
-        taskEntry.innerHTML = ` <div class="taskStatusLabel">Enqueued</div>
-                          <button class="secondaryButton stopTask"><i class="fa-solid fa-trash-can"></i> Remove</button>
-                          <div class="preview-prompt collapsible active"></div>
-                          <div class="taskConfig">${taskConfig}</div>
-                          <div class="collapsible-content" style="display: block">
-                              <div class="outputMsg"></div>
-                              <div class="progressBar"></div>
-                              <div class="img-preview">
-                          </div>`;
 
-        // createCollapsibles(taskEntry);
 
         task['numOutputsTotal'] = numOutputsTotal;
-        task['taskStatusLabel'] = taskEntry.querySelector('.taskStatusLabel');
-        task['outputContainer'] = taskEntry.querySelector('.img-preview');
-        task['outputMsg'] = taskEntry.querySelector('.outputMsg');
-        task['previewPrompt'] = taskEntry.querySelector('.preview-prompt');
-        task['progressBar'] = taskEntry.querySelector('.progressBar');
-        task['stopTask'] = taskEntry.querySelector('.stopTask');
-
-        task['stopTask'].addEventListener('click', async function () {
-            if (task['isProcessing']) {
-                task.isProcessing = false;
-                try {
-                    let res = await fetch('/image/stop');
-                } catch (e) {
-                    console.log(e);
-                }
-            } else {
-                let idx = newTaskQueue.indexOf(task);
-                if (idx >= 0) {
-                    newTaskQueue.splice(idx, 1);
-                }
-
-                newTaskQueue.remove();
-            }
-        });
-
-        imagePreview.insertBefore(taskEntry, previewTools.nextSibling);
-
-        task['previewPrompt'].innerText = prompt;
 
         newTaskQueue.unshift(task);
         setTaskQueue(newTaskQueue);
-
-        initialText.style.display = 'none';
     }
+
+    const stopTask = async () => {
+        if (!currentTask.current) {
+            return;
+        }
+        const { current } = currentTask;
+        if (current['isProcessing']) {
+            current.isProcessing = false;
+            try {
+                let res = await fetch(`${API_PATH}/image/stop`);
+            } catch (e) {
+                console.log(e);
+            }
+        } else {
+            let newTaskQueue = [...taskQueue]
+            let idx = newTaskQueue.indexOf(current);
+            if (idx >= 0) {
+                newTaskQueue.splice(idx, 1);
+            }
+
+            newTaskQueue.remove();
+            setTaskQueue(newTaskQueue)
+        }
+    }
+
+    return { makeImage, result }
 };

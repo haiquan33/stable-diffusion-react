@@ -14,3 +14,4 @@ export const HEALTH_PING_INTERVAL = 5; // seconds
 export const MAX_INIT_IMAGE_DIMENSION = 768;
 
 export const IMAGE_REGEX = new RegExp('data:image/[A-Za-z]+;base64');
+export const API_PATH = 'http://localhost:9000'
