@@ -220,10 +220,10 @@ export const useProcessPromt = ({ config }) => {
             handleMsg(
                 'error',
                 'Stable Diffusion had an error. Please check the logs in the command-line window. <br/><br/>' +
-                    e +
-                    '<br/><pre>' +
-                    e.stack +
-                    '</pre>'
+                e +
+                '<br/><pre>' +
+                e.stack +
+                '</pre>'
             );
             handleStatus('request', 'error', 'error');
             setIsProcessing(false);
@@ -356,5 +356,5 @@ export const useProcessPromt = ({ config }) => {
         }
     };
 
-    return { makeImage, result, processPercent };
+    return { makeImage, result, processPercent, isProcessing };
 };
